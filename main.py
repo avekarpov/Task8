@@ -1,11 +1,10 @@
-import math
+import numpy
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import copy
 
 
 dx = 0.05
-dy = 0.05
+dy = 0.025
 dt = 0.0001
 
 if dt / (dx ** 2) + dt / (dy ** 2) >= 0.5:
@@ -16,128 +15,115 @@ def difference_scheme(values, i, j):
     if i == 0 or i == len(values) - 1 or j == 0 or j == len(values[0]) - 1:
         raise  # error
 
-    return (values[i][j + 1] + values[i][j - 1] + values[i - 1][j] + values[i + 1][j]) / 4.
+    return (values[j + 1, i] + values[j - 1, i] + values[j, i - 1] + values[j, i + 1]) / 4.
 
 
-def modulation(x0, x_len, y0, y_len):
-    slice_ax_n = 10
-    slice_ax = 'y'
+def create_list(start, end, step):
+    l = []
+    end += 0.5 * step
+    while start < end:
+        l.append(start)
+        start += step
 
-    def x_left_boundary_dx(y, next):  # du/dx(0, y) = 0
+    return l
+
+
+def modulation(x_len, y_len, time):
+    ax = plt.axes(projection='3d')
+
+    def x_left_boundary_dx(y, next):  # du/dx(0, y) = 0  # left
         return next
 
-    def x_right_boundary(y):  # u(2, y) = -sin(3 * pi * y)
-        return -math.sin(3 * math.pi * y)
+    def x_right_boundary(y):  # u(2, y) = -sin(3 * pi * y)  # right
+        return numpy.sin(3 * numpy.pi * y)
 
-    def y_left_boundary(x):  # u(x, 0) = 0
+    def y_left_boundary(x):  # u(x, 0) = 0  # top
         return 0
 
-    def y_right_boundary(x):  # u(x, 1) = -cos(7 * pi * x / 4)
-        return -math.cos(7 * math.pi * x / 4)
+    def y_right_boundary(x):  # u(x, 1) = -cos(7 * pi * x / 4)  # bottom
+        return -numpy.cos(7 * numpy.pi * x / 4)
 
     def initial_condition(x, y):  # u(x, y) = 0, t = 0
         return 1
 
-    frames = []
-    fig, ax = plt.subplots()
-
-    x = x0
-    y = y0
     t = 0
-    xs = []
-    ys = []
     ts = []
-    us_next = []
+
+    xs = numpy.array(create_list(0, x_len, dx))
+    ys = numpy.array(create_list(0, y_len, dy))
+    us_next = numpy.empty((ys.size, xs.size))
 
     ts.append(t)
 
-    while x < x_len:
-        xs.append(x)
-        x += dx
+    for i in range(xs.size):  # whole
+        for j in range(ys.size):
+            us_next[j, i] = initial_condition(xs[i], xs[j])
 
-    while y < y_len:
-        ys.append(y)
-        y += dy
+    for i in range(ys.size - 1):  # left
+        us_next[i, 0] = x_left_boundary_dx(ys[i], us_next[i + 1, 0])
 
-    for i in range(0, len(xs)):
-        us_next.append([])
-        for j in range(0, len(ys)):
-            us_next[i].append(initial_condition(xs[i], ys[j]))
+    for i in range(ys.size):  # right
+        us_next[i, -1] = x_right_boundary(ys[i])
 
-    for i in range(len(xs) - 1):
-        us_next[i][0] = x_left_boundary_dx(xs[i], us_next[i + 1][0])
-        us_next[i][-1] = x_right_boundary(xs[i])
+    for i in range(xs.size):  # top
+        us_next[0, i] = y_left_boundary(xs[i])
 
-    for i in range(len(ys) - 1):
-        us_next[0][i] = y_left_boundary(ys[i])
-        us_next[-1][i] = y_right_boundary(ys[i])
+    for i in range(xs.size):  # bottom
+        us_next[-1, i] = y_right_boundary(xs[i])
 
     us = copy.deepcopy(us_next)
 
-    t += dt
+    if time == 0:
+        xxs, yys = numpy.meshgrid(xs, ys)
+        ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
 
-    if slice_ax == 'x':
-        line = []
-        for i in range(len(ys)):
-            line.append(us[slice_ax_n][i])
-        line = ax.plot(ys, line, '-b')
-        frames.append(line)
-    elif slice_ax == 'y':
-        line = []
-        for i in range(len(xs)):
-            line.append(us[i][slice_ax_n])
-        line = ax.plot(xs, line, '-b')
-        frames.append(line)
+    t += dt
 
     print('Start calc')
 
-    while True:
-        print('t:', t, end=' ')
+    while time == -1 or time:
+        # print('t:', t, end=' ')
 
         ts.append(t)
 
-        for i in range(1, len(xs) - 1):
-            for j in range(1, len(ys) - 1):
-                us_next[i][j] = difference_scheme(us, i, j)
+        for i in range(1, xs.size - 1):
+            for j in range(1, ys.size - 1):
+                us_next[j, i] = difference_scheme(us, i, j)
 
-        for i in range(len(xs) - 1):
-            us_next[i][0] = x_left_boundary_dx(xs[i], us_next[i + 1][0])
-            us_next[i][-1] = x_right_boundary(xs[i])
+        for i in range(ys.size - 1):  # left
+            us_next[i, 0] = x_left_boundary_dx(ys[i], us_next[i + 1, 0])
 
-        for i in range(len(ys) - 1):
-            us_next[0][i] = y_left_boundary(ys[i])
-            us_next[-1][i] = y_right_boundary(ys[i])
+        for i in range(ys.size):  # right
+            us_next[i, -1] = x_right_boundary(ys[i])
+
+        for i in range(xs.size):  # top
+            us_next[0, i] = y_left_boundary(xs[i])
+
+        for i in range(xs.size):  # bottom
+            us_next[-1, i] = y_right_boundary(xs[i])
 
         dif = 0
-        for i in range(len(us)):
-            for j in range(len(us[0])):
-                dif += us[i][j] - us_next[i][j]
+        for i in range(xs.size):
+            for j in range(ys.size):
+                dif += us[j, i] - us_next[j, i]
         dif = abs(dif)
-        print("dif:", dif)
+        # print("dif:", dif)
         if dif < 1e-6:
+            xxs, yys = numpy.meshgrid(xs, ys)
+            ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
             break
 
         us = copy.deepcopy(us_next)
 
+        if time != -1 and t >= time:
+            xxs, yys = numpy.meshgrid(xs, ys)
+            ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
+            break
+
         t += dt
 
-        if slice_ax == 'x':
-            line = []
-            for i in range(len(ys)):
-                line.append(us[slice_ax_n][i])
-            line = ax.plot(ys, line, '-b')
-            frames.append(line)
-        elif slice_ax == 'y':
-            line = []
-            for i in range(len(xs)):
-                line.append(us[i][slice_ax_n])
-            line = ax.plot(xs, line, '-b')
-            frames.append(line)
-
     print('End calc')
-
-    ani = animation.ArtistAnimation(fig, frames, interval=1, blit=True, repeat=True)
     plt.show()
 
 
-modulation(0, 1, 0, 1)
+modulation(2, 1, -1)
