@@ -18,17 +18,7 @@ def difference_scheme(values, i, j):
     return (values[j + 1, i] + values[j - 1, i] + values[j, i - 1] + values[j, i + 1]) / 4.
 
 
-def create_list(start, end, step):
-    l = []
-    end += 0.5 * step
-    while start < end:
-        l.append(start)
-        start += step
-
-    return l
-
-
-def modulation(x_len, y_len, time):
+def modulation(x_len, y_len, time=-1, precision=1e-6):
     ax = plt.axes(projection='3d')
 
     def x_left_boundary_dx(y, next):  # du/dx(0, y) = 0  # left
@@ -47,49 +37,12 @@ def modulation(x_len, y_len, time):
         return 1
 
     t = 0
-    ts = []
 
-    xs = numpy.array(create_list(0, x_len, dx))
-    ys = numpy.array(create_list(0, y_len, dy))
+    xs = numpy.arange(0, x_len + 0.5 * dx, dx)
+    ys = numpy.arange(0, y_len + 0.5 * dy, dy)
     us_next = numpy.empty((ys.size, xs.size))
 
-    ts.append(t)
-
-    for i in range(xs.size):  # whole
-        for j in range(ys.size):
-            us_next[j, i] = initial_condition(xs[i], xs[j])
-
-    for i in range(ys.size - 1):  # left
-        us_next[i, 0] = x_left_boundary_dx(ys[i], us_next[i + 1, 0])
-
-    for i in range(ys.size):  # right
-        us_next[i, -1] = x_right_boundary(ys[i])
-
-    for i in range(xs.size):  # top
-        us_next[0, i] = y_left_boundary(xs[i])
-
-    for i in range(xs.size):  # bottom
-        us_next[-1, i] = y_right_boundary(xs[i])
-
-    us = copy.deepcopy(us_next)
-
-    if time == 0:
-        xxs, yys = numpy.meshgrid(xs, ys)
-        ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
-
-    t += dt
-
-    print('Start calc')
-
-    while time == -1 or time:
-        # print('t:', t, end=' ')
-
-        ts.append(t)
-
-        for i in range(1, xs.size - 1):
-            for j in range(1, ys.size - 1):
-                us_next[j, i] = difference_scheme(us, i, j)
-
+    def boundaries():
         for i in range(ys.size - 1):  # left
             us_next[i, 0] = x_left_boundary_dx(ys[i], us_next[i + 1, 0])
 
@@ -102,13 +55,38 @@ def modulation(x_len, y_len, time):
         for i in range(xs.size):  # bottom
             us_next[-1, i] = y_right_boundary(xs[i])
 
+    for i in range(xs.size):  # whole
+        for j in range(ys.size):
+            us_next[j, i] = initial_condition(xs[i], xs[j])
+
+    boundaries()
+
+    us = copy.deepcopy(us_next)
+
+    if time == 0:
+        xxs, yys = numpy.meshgrid(xs, ys)
+        ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
+
+    t += dt
+
+    print('Start calc')
+
+    while time == -1 or time:
+        print('t:', t, end=' ')
+
+        for i in range(1, xs.size - 1):
+            for j in range(1, ys.size - 1):
+                us_next[j, i] = difference_scheme(us, i, j)
+
+        boundaries()
+
         dif = 0
         for i in range(xs.size):
             for j in range(ys.size):
-                dif += us[j, i] - us_next[j, i]
-        dif = abs(dif)
-        # print("dif:", dif)
-        if dif < 1e-6:
+                dif += abs(us[j, i] - us_next[j, i])
+        dif /= xs.size * ys.size
+        print("dif:", dif)
+        if dif < precision:
             xxs, yys = numpy.meshgrid(xs, ys)
             ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
             break
