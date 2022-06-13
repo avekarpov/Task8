@@ -1,14 +1,46 @@
-import numpy
-import matplotlib.pyplot as plt
+#!/usr/bin/env python3
+
 import copy
+import logging
+import sys
+from argparse import ArgumentParser
+
+import matplotlib.pyplot as plt
+import numpy
 
 
-dx = 0.05
-dy = 0.025
-dt = 0.0001
+logging.basicConfig()
+logging.getLogger().setLevel(logging.WARNING)
 
-if dt / (dx ** 2) + dt / (dy ** 2) >= 0.5:
-    raise RuntimeError('dt must more small')
+logger = logging.getLogger('Task8')
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument('--dx', type=float, default=0.05)
+    parser.add_argument('--dy', type=float, default=0.025)
+    parser.add_argument('--dt', type=float, default=0.0001)
+    parser.add_argument('--log', type=str, default='INFO')
+
+    args = parser.parse_args(sys.argv[1:])
+
+    numeric_level = getattr(logging, args.log.upper(), None)
+    if not isinstance(numeric_level, int):
+        parser.error('Invalid log level: %s' % args.log)
+    logger.setLevel(numeric_level)
+
+    dx = args.dx
+    dy = args.dy
+    dt = args.dt
+
+    logger.info(f'{dx=} {dy=} {dt=}')
+
+    if dt / (dx ** 2) + dt / (dy ** 2) >= 0.5:
+        parser.error(
+            'dt should be smaller: dt / (dx ** 2) + dt / (dy ** 2) >= 0.5'
+        )
+
+    modulation(dx, dy, dt, 2, 1, -1)
 
 
 def difference_scheme(values, i, j):
@@ -18,7 +50,7 @@ def difference_scheme(values, i, j):
     return (values[j + 1, i] + values[j - 1, i] + values[j, i - 1] + values[j, i + 1]) / 4.
 
 
-def modulation(x_len, y_len, time=-1, precision=1e-6):
+def modulation(dx, dy, dt, x_len, y_len, time=-1, precision=1e-6):
     ax = plt.axes(projection='3d')
 
     def x_left_boundary_dx(y, next):  # du/dx(0, y) = 0  # left
@@ -69,10 +101,10 @@ def modulation(x_len, y_len, time=-1, precision=1e-6):
 
     t += dt
 
-    print('Start calc')
+    logger.info('Start calc')
 
     while time == -1 or time:
-        print('t:', t, end=' ')
+        logger.debug(f'{t=}')
 
         for i in range(1, xs.size - 1):
             for j in range(1, ys.size - 1):
@@ -85,7 +117,7 @@ def modulation(x_len, y_len, time=-1, precision=1e-6):
             for j in range(ys.size):
                 dif += abs(us[j, i] - us_next[j, i])
         dif /= xs.size * ys.size
-        print("dif:", dif)
+        logger.debug(f'{dif=}')
         if dif < precision:
             xxs, yys = numpy.meshgrid(xs, ys)
             ax.plot_surface(xxs, yys, us, rstride=1, cstride=1, cmap='viridis')
@@ -100,8 +132,9 @@ def modulation(x_len, y_len, time=-1, precision=1e-6):
 
         t += dt
 
-    print('End calc')
+    logger.info('End calc')
     plt.show()
 
 
-modulation(2, 1, -1)
+if __name__ == '__main__':
+    main()
